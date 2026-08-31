@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Style OS</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #0c0b10; padding: 20px; }
+  #root { max-width: 1200px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+
+const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');`;
+
+const C = {
+  ink: "#16151C",
+  ink2: "#1E1D26",
+  line: "#312F3A",
+  mute: "#8B899A",
+  paper: "#F3EFE4",
+  acid: "#E4FF4D",
+  acidText: "#1F2400",
+  hot: "#FF3D6E",
+  ok: "#2FD98A",
+  okText: "#02341C",
+  blue: "#8FD3FF",
+  blueText: "#00263D",
+  amber: "#F5B942",
+  amberText: "#3D2900",
+};
+
+const OWNERS = { Mike: { bg: C.acid, text: C.acidText }, Adam: { bg: C.blue, text: C.blueText } };
+const uid = () => Math.random().toString(36).slice(2, 9);
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—");
+const hoursAgo = (iso) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 3600000));
+const daysUntil = (iso) => {
+  if (!iso) return null;
+  const ms = new Date(iso + "T00:00:00").getTime() - new Date(todayISO() + "T00:00:00").getTime();
+  return Math.round(ms / 86400000);
+};
+
+const ENQUIRY_STATUSES = [
+  { key: "new", label: "New" },
+  { key: "draft_ready", label: "Draft ready" },
+  { key: "awaiting_reply", label: "Awaiting reply" },
+  { key: "call_booked", label: "Call booked" },
+  { key: "follow_up_due", label: "Follow-up due" },
+  { key: "converted", label: "Converted" },
+  { key: "lost", label: "Lost" },
+];
+const LOST_REASONS = ["Too expensive", "Date clash", "Went with a DJ", "Went with another band", "Went quiet", "Other"];
+
+const STAGES = [
+  { key: "contract", label: "Awaiting signed contract" },
+  { key: "deposit", label: "Awaiting deposit" },
+  { key: "live", label: "Live bookings" },
+];
+
+function inNDays(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+const seedPackages = [
+  { id: "pkg1", name: "5-piece band, full evening", price: 2400, description: "Ceremony music, drinks reception set, evening performance." },
+  { id: "pkg2", name: "Duo acoustic + DJ", price: 1600, description: "Acoustic set through dinner, DJ for the evening." },
+];
+
+const seedEnquiries = [
+  { id: uid(), client: "Molly Harris", venue: "Clevedon Hall", date: inNDays(120), owner: "Adam", status: "draft_ready", value: 2800, receivedAt: new Date(Date.now() - 38 * 60000).toISOString(), email: "molly.harris@gmail.com", phone: "07700 900111", followUpDate: null, quotedPackageId: null, lostReason: "" },
+  { id: uid(), client: "Sophie Bennett", venue: "De Vere Tortworth Court", date: inNDays(210), owner: "Mike", status: "awaiting_reply", value: 3200, receivedAt: new Date(Date.now() - 5 * 3600000).toISOString(), email: "sophie.b@outlook.com", phone: "07700 900222", followUpDate: inNDays(2), quotedPackageId: "pkg1", lostReason: "" },
+  { id: uid(), client: "Laura & James", venue: "Priston Mill", date: inNDays(30), owner: "Adam", status: "call_booked", value: 3600, receivedAt: new Date(Date.now() - 26 * 3600000).toISOString(), email: "laurajames27@gmail.com", phone: "07700 900333", followUpDate: null, quotedPackageId: null, lostReason: "" },
+  { id: uid(), client: "Emily Clarke", venue: "Aldwick Estate", date: inNDays(160), owner: "Mike", status: "follow_up_due", value: 2400, receivedAt: new Date(Date.now() - 96 * 3600000).toISOString(), email: "emilyclarke19@gmail.com", phone: "07700 900444", followUpDate: inNDays(-1), quotedPackageId: "pkg2", lostReason: "" },
+];
+
+const seedBookings = [
+  { id: uid(), client: "Sarah & Tom Reeves", date: inNDays(20), venue: "The Ivy, Cotswolds", owner: "Mike", stage: "contract", contractReceived: false, contractReceivedDate: null, deposit: "awaiting", paidInFull: false, archived: false, email: "sarah.reeves@gmail.com", phone: "07700 900555", notes: "", commsLog: [
+    { id: uid(), date: inNDays(-9), from: "Sarah Reeves", subject: "Re: Song list for the evening", snippet: "Sending over our must-play list — mostly Motown and a couple of Fleetwood Mac tracks." },
+  ] },
+  { id: uid(), client: "Chloe & James Ahmed", date: inNDays(80), venue: "Barnsley House", owner: "Adam", stage: "deposit", contractReceived: true, contractReceivedDate: "18 Jan 2027", deposit: "awaiting", paidInFull: false, archived: false, email: "chloe.ahmed@outlook.com", phone: "07700 900666", notes: "", commsLog: [] },
+  { id: uid(), client: "The Hendersons", date: inNDays(300), venue: "Home House, London", owner: "Mike", stage: "live", contractReceived: true, contractReceivedDate: "02 Dec 2026", deposit: "received", paidInFull: false, archived: false, email: "hendersons2027@gmail.com", phone: "07700 900777", notes: "Prefers text over email for quick things.", commsLog: [] },
+];
+
+const seedCalls = [
+  { id: uid(), client: "Laura & James", when: "Tue · 18:30", venue: "Priston Mill", notes: "Talk through first-dance song and set break timings." },
+];
+
+const seedVenues = [
+  { id: uid(), name: "Priston Mill", location: "Bath, Somerset", notes: "Sound curfew 11pm. Power via generator." },
+  { id: uid(), name: "Barnsley House", location: "Cirencester", notes: "In-house PA available, ask for spec sheet." },
+];
+
+function Icon({ children, size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block", verticalAlign: "-3px" }}>
+      {children}
+    </svg>
+  );
+}
+const IUndo = (p) => <Icon {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></Icon>;
+const IPlus = (p) => <Icon {...p}><path d="M12 5v14M5 12h14" /></Icon>;
+const IX = (p) => <Icon {...p}><path d="M18 6 6 18M6 6l12 12" /></Icon>;
+const ICheck = (p) => <Icon {...p}><path d="M20 6 9 17l-5-5" /></Icon>;
+const IArrowLeft = (p) => <Icon {...p}><path d="M19 12H5M12 19l-7-7 7-7" /></Icon>;
+const IArchive = (p) => <Icon {...p}><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 13h4" /></Icon>;
+const IDownload = (p) => <Icon {...p}><path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16" /></Icon>;
+const IUpload = (p) => <Icon {...p}><path d="M12 21V9m0 0-4 4m4-4 4 4M4 5h16" /></Icon>;
+const ICompass = (p) => <Icon {...p}><circle cx="12" cy="12" r="9" /><path d="m14.5 9.5-2 5-3 1.5 2-5z" /></Icon>;
+const IInbox = (p) => <Icon {...p}><path d="M4 12h4l1.5 3h5L16 12h4" /><rect x="3" y="5" width="18" height="14" rx="2" /></Icon>;
+const IGrid = (p) => <Icon {...p}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></Icon>;
+const IPhone = (p) => <Icon {...p}><rect x="6" y="2" width="12" height="20" rx="2" /><path d="M11 18h2" /></Icon>;
+const IMap = (p) => <Icon {...p}><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z" /><path d="M9 4v14M15 6v14" /></Icon>;
+const ITag = (p) => <Icon {...p}><path d="m20.6 12.6-8-8H4v8.6l8 8a2 2 0 0 0 2.8 0l5.8-5.8a2 2 0 0 0 0-2.8Z" /><circle cx="8.5" cy="8.5" r="1" /></Icon>;
+const IAlert = (p) => <Icon {...p}><path d="M12 9v4M12 17h.01" /><path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0Z" /></Icon>;
+const IMail = (p) => <Icon {...p}><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 6-10 7L2 6" /></Icon>;
+
+function Section({ title, right, children }) {
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <span style={{ fontFamily: "'Anton', sans-serif", color: C.paper, letterSpacing: "0.02em" }} className="text-lg uppercase">{title}</span>
+        {right}
+      </div>
+      {children}
+    </div>
+  );
+}
+function Card({ children, style }) {
+  return <div style={{ background: C.paper, borderRadius: 8, ...style }} className="p-4">{children}</div>;
+}
+function Pill({ bg, text, children }) {
+  return <span style={{ background: bg, color: text, fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5 }} className="px-2 py-0.5 rounded-sm uppercase tracking-wide whitespace-nowrap">{children}</span>;
+}
+function OwnerTag({ owner }) {
+  const c = OWNERS[owner] || OWNERS.Mike;
+  return <Pill bg={c.bg} text={c.text}>{owner}</Pill>;
+}
+function UrgencyPill({ days }) {
+  if (days === null) return null;
+  let bg = "#D8D2BE", text = "#3A3626", label = `${days}d`;
+  if (days < 0) { bg = C.hot; text = "#fff"; label = `${Math.abs(days)}d overdue`; }
+  else if (days === 0) { bg = C.hot; text = "#fff"; label = "Today"; }
+  else if (days <= 45) { bg = C.amber; text = C.amberText; label = `${days}d away`; }
+  else { label = `${days}d away`; }
+  return <Pill bg={bg} text={text}>{label}</Pill>;
+}
+function BtnGhost({ onClick, children, style }) {
+  return (
+    <button onClick={onClick} style={{ borderColor: C.ink, color: C.ink, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, ...style }} className="border px-2.5 py-1 rounded-sm uppercase tracking-wide flex items-center gap-1 active:scale-95 transition">
+      {children}
+    </button>
+  );
+}
+function Field(props) {
+  return <input {...props} style={{ fontFamily: "'IBM Plex Mono', monospace", ...props.style }} className={"px-2 py-1.5 rounded-sm text-sm w-full " + (props.className || "")} />;
+}
+function BookingDetailModal({ booking, packages, onSave, onClose }) {
+  const [draft, setDraft] = useState(booking);
+  const [logForm, setLogForm] = useState({ from: "", subject: "", snippet: "" });
+
+  function addLogEntry() {
+    if (!logForm.subject.trim()) return;
+    const entry = { id: uid(), date: todayISO(), from: logForm.from.trim() || draft.client, subject: logForm.subject.trim(), snippet: logForm.snippet.trim() };
+    setDraft({ ...draft, commsLog: [entry, ...(draft.commsLog || [])] });
+    setLogForm({ from: "", subject: "", snippet: "" });
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 50 }} className="flex items-center justify-center p-4" onClick={onClose}>
+      <div style={{ background: C.paper, borderRadius: 10, maxHeight: "90vh", overflowY: "auto" }} className="w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <span style={{ fontFamily: "'Anton', sans-serif", color: C.ink }} className="text-2xl">Customer details</span>
+          <button onClick={onClose} style={{ color: C.ink }}><IX size={18} /></button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+          <div>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] uppercase mb-1 opacity-60">Client name(s)</div>
+            <Field value={draft.client} onChange={(e) => setDraft({ ...draft, client: e.target.value })} />
+          </div>
+          <div>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] uppercase mb-1 opacity-60">Owner</div>
+            <select value={draft.owner} onChange={(e) => setDraft({ ...draft, owner: e.target.value })} style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="px-2 py-1.5 rounded-sm text-sm w-full">
+              <option>Mike</option><option>Adam</option>
+            </select>
+          </div>
+          <div>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] uppercase mb-1 opacity-60 flex items-center gap-1"><IMail size={11} /> Email</div>
+            <Field value={draft.email || ""} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="client@email.com" />
+          </div>
+          <div>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] uppercase mb-1 opacity-60">Phone</div>
+            <Field value={draft.phone || ""} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="07700 900000" />
+          </div>
+          <div>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] uppercase mb-1 opacity-60">Wedding date</div>
+            <Field type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} />
+          </div>
+          <div>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] uppercase mb-1 opacity-60">Venue</div>
+            <Field value={draft.venue} onChange={(e) => setDraft({ ...draft, venue: e.target.value })} />
+          </div>
+          <div className="md:col-span-2">
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] uppercase mb-1 opacity-60">Notes</div>
+            <textarea value={draft.notes || ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} rows={2} style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="px-2 py-1.5 rounded-sm text-sm w-full" placeholder="Anything worth remembering about this couple..." />
+          </div>
+        </div>
+
+        <div style={{ borderTop: "1px dashed #C9C2AC" }} className="pt-4">
+          <div className="flex items-center justify-between mb-2">
+            <span style={{ fontFamily: "'Anton', sans-serif", color: C.ink }} className="text-base">Emails with this couple</span>
+          </div>
+          <div style={{ color: "#8A8367", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] mb-3 leading-relaxed">
+            This can't pull from Gmail automatically yet — that needs a real Gmail connection (OAuth + the Gmail API) running on a server, which is outside what this standalone app can do on its own. For now, log emails here manually so there's one place to check the history.
+          </div>
+
+          <div className="flex flex-col gap-2 mb-3">
+            {(draft.commsLog || []).length === 0 && <div style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs opacity-60">No emails logged yet.</div>}
+            {(draft.commsLog || []).map((log) => (
+              <div key={log.id} style={{ background: "#EAE4D3", borderRadius: 6 }} className="p-2.5">
+                <div className="flex items-center justify-between">
+                  <span style={{ fontWeight: 700, color: C.ink, fontSize: 13 }}>{log.subject}</span>
+                  <span style={{ color: "#8A8367", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[10.5px]">{fmtDate(log.date)}</span>
+                </div>
+                <div style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] mt-0.5">From: {log.from}</div>
+                {log.snippet && <div style={{ color: "#4A4738" }} className="text-xs mt-1">{log.snippet}</div>}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <Field placeholder="From" value={logForm.from} onChange={(e) => setLogForm({ ...logForm, from: e.target.value })} />
+            <Field placeholder="Subject" value={logForm.subject} onChange={(e) => setLogForm({ ...logForm, subject: e.target.value })} className="md:col-span-2" />
+          </div>
+          <textarea placeholder="Short summary of what was said..." value={logForm.snippet} onChange={(e) => setLogForm({ ...logForm, snippet: e.target.value })} rows={2} style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="px-2 py-1.5 rounded-sm text-sm w-full mt-2" />
+          <button onClick={addLogEntry} style={{ borderColor: C.ink, color: C.ink, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="border px-2.5 py-1 rounded-sm uppercase tracking-wide mt-2">
+            + Log this email
+          </button>
+        </div>
+
+        <div className="flex gap-2 mt-6">
+          <button onClick={() => onSave(draft)} style={{ background: C.ink, color: C.paper, fontFamily: "'IBM Plex Mono', monospace" }} className="px-4 py-2 rounded-sm text-xs uppercase">Save changes</button>
+          <button onClick={onClose} style={{ color: C.ink, fontFamily: "'IBM Plex Mono', monospace" }} className="px-4 py-2 rounded-sm text-xs uppercase">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub }) {
+  return (
+    <Card style={{ minWidth: 0 }}>
+      <div style={{ fontFamily: "'Anton', sans-serif", color: C.ink }} className="text-2xl leading-none">{value}</div>
+      <div style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] uppercase tracking-wide mt-1">{label}</div>
+      {sub && <div style={{ color: "#8A8367" }} className="text-[11px] mt-0.5">{sub}</div>}
+    </Card>
+  );
+}
+
+const NAV = [
+  { key: "command", label: "Command", icon: ICompass },
+  { key: "enquiries", label: "Enquiries", icon: IInbox },
+  { key: "pipeline", label: "Pipeline", icon: IGrid },
+  { key: "calls", label: "Calls", icon: IPhone },
+  { key: "venues", label: "Venues", icon: IMap },
+  { key: "packages", label: "Packages", icon: ITag },
+];
+
+function StyleOS() {
+  const [tab, setTab] = useState("command");
+  const [enquiries, setEnquiries] = useState(seedEnquiries);
+  const [bookings, setBookings] = useState(seedBookings);
+  const [calls, setCalls] = useState(seedCalls);
+  const [venues, setVenues] = useState(seedVenues);
+  const [packages, setPackages] = useState(seedPackages);
+  const [history, setHistory] = useState([]);
+  const [importError, setImportError] = useState("");
+
+  const [showEnqForm, setShowEnqForm] = useState(false);
+  const [enqForm, setEnqForm] = useState({ client: "", venue: "", date: "", email: "", phone: "", value: "", quotedPackageId: "" });
+  const [showBkForm, setShowBkForm] = useState(false);
+  const [bkForm, setBkForm] = useState({ client: "", date: "", venue: "" });
+  const [detailBookingId, setDetailBookingId] = useState(null);
+  const [showCallForm, setShowCallForm] = useState(false);
+  const [callForm, setCallForm] = useState({ client: "", when: "", venue: "", notes: "" });
+  const [showVenueForm, setShowVenueForm] = useState(false);
+  const [venueForm, setVenueForm] = useState({ name: "", location: "", notes: "" });
+  const [showPkgForm, setShowPkgForm] = useState(false);
+  const [pkgForm, setPkgForm] = useState({ name: "", price: "", description: "" });
+
+  function snapshot() {
+    return { enquiries, bookings, calls, venues, packages };
+  }
+  function commit(patch, label) {
+    setHistory((h) => [...h.slice(-19), { snap: snapshot(), label }]);
+    if (patch.enquiries) setEnquiries(patch.enquiries);
+    if (patch.bookings) setBookings(patch.bookings);
+    if (patch.calls) setCalls(patch.calls);
+    if (patch.venues) setVenues(patch.venues);
+    if (patch.packages) setPackages(patch.packages);
+  }
+  function undo() {
+    if (!history.length) return;
+    const last = history[history.length - 1];
+    setEnquiries(last.snap.enquiries);
+    setBookings(last.snap.bookings);
+    setCalls(last.snap.calls);
+    setVenues(last.snap.venues);
+    setPackages(last.snap.packages);
+    setHistory((h) => h.slice(0, -1));
+  }
+
+  const ownerLoad = useMemo(() => {
+    const load = { Mike: 0, Adam: 0 };
+    enquiries.forEach((e) => { if (e.status !== "converted" && e.status !== "lost") load[e.owner] = (load[e.owner] || 0) + 1; });
+    bookings.forEach((b) => { if (!b.archived) load[b.owner] = (load[b.owner] || 0) + 1; });
+    return load;
+  }, [enquiries, bookings]);
+  const nextOwner = ownerLoad.Mike <= ownerLoad.Adam ? "Mike" : "Adam";
+
+  // date-clash detection across every active enquiry + booking
+  const clashDates = useMemo(() => {
+    const counts = {};
+    enquiries.forEach((e) => { if (e.status !== "lost" && e.status !== "converted" && e.date) counts[e.date] = (counts[e.date] || 0) + 1; });
+    bookings.forEach((b) => { if (!b.archived && b.date) counts[b.date] = (counts[b.date] || 0) + 1; });
+    return new Set(Object.keys(counts).filter((d) => counts[d] > 1));
+  }, [enquiries, bookings]);
+
+  function addEnquiry() {
+    if (!enqForm.client.trim() || !enqForm.venue.trim() || !enqForm.date) return;
+    const pkg = packages.find((p) => p.id === enqForm.quotedPackageId);
+    const e = {
+      id: uid(), client: enqForm.client.trim(), venue: enqForm.venue.trim(), date: enqForm.date, owner: nextOwner,
+      status: "new", value: Number(enqForm.value) || (pkg ? pkg.price : 0), receivedAt: new Date().toISOString(),
+      email: enqForm.email.trim(), phone: enqForm.phone.trim(), followUpDate: null, quotedPackageId: enqForm.quotedPackageId || null, lostReason: "",
+    };
+    commit({ enquiries: [e, ...enquiries] }, `Add enquiry "${e.client}"`);
+    setEnqForm({ client: "", venue: "", date: "", email: "", phone: "", value: "", quotedPackageId: "" });
+    setShowEnqForm(false);
+  }
+  function patchEnquiry(id, patch, label) {
+    commit({ enquiries: enquiries.map((x) => (x.id === id ? { ...x, ...patch } : x)) }, label);
+  }
+  function setEnqStatus(id, status) {
+    const e = enquiries.find((x) => x.id === id);
+    patchEnquiry(id, { status, lostReason: status === "lost" ? e.lostReason : "" }, `${e.client} → ${ENQUIRY_STATUSES.find((s) => s.key === status).label}`);
+  }
+  function setEnqPackage(id, packageId) {
+    const e = enquiries.find((x) => x.id === id);
+    const pkg = packages.find((p) => p.id === packageId);
+    patchEnquiry(id, { quotedPackageId: packageId || null, value: pkg ? pkg.price : e.value }, `Quoted "${pkg ? pkg.name : "no package"}" — ${e.client}`);
+  }
+  function convertEnquiry(e) {
+    const b = { id: uid(), client: e.client, date: e.date, venue: e.venue, owner: e.owner, stage: "contract", contractReceived: false, contractReceivedDate: null, deposit: "awaiting", paidInFull: false, archived: false };
+    commit({ enquiries: enquiries.map((x) => (x.id === e.id ? { ...x, status: "converted" } : x)), bookings: [b, ...bookings] }, `Converted "${e.client}" to booking`);
+  }
+
+  function addBooking() {
+    if (!bkForm.client.trim() || !bkForm.date || !bkForm.venue.trim()) return;
+    const b = { id: uid(), client: bkForm.client.trim(), date: bkForm.date, venue: bkForm.venue.trim(), owner: nextOwner, stage: "contract", contractReceived: false, contractReceivedDate: null, deposit: "awaiting", paidInFull: false, archived: false, email: "", phone: "", notes: "", commsLog: [] };
+    commit({ bookings: [b, ...bookings] }, `Add booking "${b.client}"`);
+    setBkForm({ client: "", date: "", venue: "" });
+    setShowBkForm(false);
+  }
+  function updateBooking(id, patch, label) {
+    commit({ bookings: bookings.map((b) => (b.id === id ? { ...b, ...patch } : b)) }, label);
+  }
+
+  function addCall() {
+    if (!callForm.client.trim() || !callForm.when.trim()) return;
+    commit({ calls: [{ id: uid(), ...callForm }, ...calls] }, `Booked call — ${callForm.client}`);
+    setCallForm({ client: "", when: "", venue: "", notes: "" });
+    setShowCallForm(false);
+  }
+  function removeCall(id) {
+    const c = calls.find((x) => x.id === id);
+    commit({ calls: calls.filter((x) => x.id !== id) }, `Removed call — ${c.client}`);
+  }
+  function addVenue() {
+    if (!venueForm.name.trim()) return;
+    commit({ venues: [{ id: uid(), ...venueForm }, ...venues] }, `Add venue "${venueForm.name}"`);
+    setVenueForm({ name: "", location: "", notes: "" });
+    setShowVenueForm(false);
+  }
+  function addPackage() {
+    if (!pkgForm.name.trim()) return;
+    commit({ packages: [{ id: uid(), ...pkgForm, price: Number(pkgForm.price) || 0 }, ...packages] }, `Add package "${pkgForm.name}"`);
+    setPkgForm({ name: "", price: "", description: "" });
+    setShowPkgForm(false);
+  }
+
+  function exportData() {
+    const blob = new Blob([JSON.stringify(snapshot(), null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `style-os-backup-${todayISO()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  function importData(ev) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        commit({ enquiries: data.enquiries || [], bookings: data.bookings || [], calls: data.calls || [], venues: data.venues || [], packages: data.packages || [] }, "Imported backup");
+        setImportError("");
+      } catch {
+        setImportError("That file doesn't look like a valid Style OS backup.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  const openEnquiries = enquiries.filter((e) => e.status !== "converted" && e.status !== "lost");
+  const pipelineValue = enquiries.filter((e) => e.status === "draft_ready" || e.status === "awaiting_reply").reduce((s, e) => s + (e.value || 0), 0);
+  const confirmedCount = bookings.filter((b) => !b.archived).length;
+  const avgResponseHrs = openEnquiries.length ? Math.round(openEnquiries.reduce((s, e) => s + hoursAgo(e.receivedAt), 0) / openEnquiries.length) : 0;
+
+  // unified "today's actions" — overdue follow-ups first, then calls, then everything else by wedding-date proximity
+  const actionItems = useMemo(() => {
+    const items = [];
+    openEnquiries.forEach((e) => {
+      const fu = e.followUpDate ? daysUntil(e.followUpDate) : null;
+      const wed = daysUntil(e.date);
+      const urgency = fu !== null ? fu : wed;
+      items.push({ kind: "enquiry", id: e.id, urgency, e });
+    });
+    calls.forEach((c) => items.push({ kind: "call", id: c.id, urgency: -0.5, c }));
+    return items.sort((a, b) => a.urgency - b.urgency).slice(0, 8);
+  }, [openEnquiries, calls]);
+
+  const detailBooking = bookings.find((b) => b.id === detailBookingId);
+
+  return (
+    <div style={{ background: C.ink, fontFamily: "'Inter', sans-serif" }} className="w-full rounded-lg overflow-hidden flex flex-col md:flex-row">
+      <style>{FONTS}</style>
+
+      {detailBooking && (
+        <BookingDetailModal
+          booking={detailBooking}
+          packages={packages}
+          onClose={() => setDetailBookingId(null)}
+          onSave={(draft) => {
+            updateBooking(draft.id, draft, `Updated details — ${draft.client}`);
+            setDetailBookingId(null);
+          }}
+        />
+      )}
+
+      <div style={{ borderRight: `1px solid ${C.line}`, background: C.ink2 }} className="md:w-52 p-4 flex md:flex-col gap-1 overflow-x-auto">
+        <div style={{ fontFamily: "'Anton', sans-serif", color: C.paper }} className="text-xl mb-4 hidden md:block">THE STYLE OS</div>
+        {NAV.map((n) => {
+          const Ico = n.icon;
+          const active = tab === n.key;
+          return (
+            <button key={n.key} onClick={() => setTab(n.key)} style={{ color: active ? C.acidText : C.paper, background: active ? C.acid : "transparent", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="px-3 py-2 rounded-sm uppercase tracking-wide flex items-center gap-2 whitespace-nowrap">
+              <Ico size={14} /> {n.label}
+              {n.key === "enquiries" && <span className="ml-auto opacity-70">{openEnquiries.length}</span>}
+            </button>
+          );
+        })}
+        <div className="hidden md:block mt-auto pt-4" style={{ borderTop: `1px dashed ${C.line}` }}>
+          <button onClick={exportData} style={{ color: C.mute, fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5 }} className="flex items-center gap-1 mb-2 uppercase tracking-wide"><IDownload size={12} /> Export backup</button>
+          <label style={{ color: C.mute, fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5 }} className="flex items-center gap-1 uppercase tracking-wide cursor-pointer"><IUpload size={12} /> Import backup<input type="file" accept="application/json" onChange={importData} className="hidden" /></label>
+          {importError && <div style={{ color: C.hot, fontSize: 10.5 }} className="mt-1">{importError}</div>}
+        </div>
+      </div>
+
+      <div className="flex-1 p-5 md:p-7 min-w-0">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
+          <div style={{ color: C.mute, fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs uppercase tracking-widest">Weddings · Bristol & the South West</div>
+          {history.length > 0 && (
+            <button onClick={undo} style={{ borderColor: C.hot, color: C.hot, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="border px-3 py-1.5 rounded-sm uppercase tracking-wide flex items-center gap-1.5" title={history[history.length - 1].label}>
+              <IUndo size={13} /> Undo: {history[history.length - 1].label}
+            </button>
+          )}
+        </div>
+
+        {clashDates.size > 0 && (
+          <Card style={{ background: C.hot, marginBottom: 24 }}>
+            <div style={{ color: "#fff", fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs flex items-center gap-2">
+              <IAlert size={14} />
+              Date clash: {[...clashDates].map(fmtDate).join(", ")} has more than one active enquiry or booking. Check before confirming either.
+            </div>
+          </Card>
+        )}
+
+        {tab === "command" && (
+          <>
+            <div style={{ fontFamily: "'Anton', sans-serif", color: C.paper }} className="text-2xl mb-1">Good to see you.</div>
+            <div style={{ color: C.mute }} className="text-sm mb-6">
+              {actionItems.length} thing{actionItems.length === 1 ? "" : "s"} on today's list. Next enquiry auto-assigns to <b style={{ color: C.paper }}>{nextOwner}</b>.
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+              <StatCard label="New enquiries" value={enquiries.filter((e) => e.status === "new").length} />
+              <StatCard label="Drafts ready" value={enquiries.filter((e) => e.status === "draft_ready").length} />
+              <StatCard label="Follow-ups due" value={enquiries.filter((e) => e.followUpDate && daysUntil(e.followUpDate) <= 0).length} sub="Due today or overdue" />
+              <StatCard label="Avg. time open" value={`${avgResponseHrs}h`} sub="Across open enquiries" />
+              <StatCard label="Open pipeline" value={`£${pipelineValue.toLocaleString()}`} sub="Draft + awaiting reply" />
+              <StatCard label="Confirmed" value={confirmedCount} sub="Contracted or live" />
+              <StatCard label="Fair split" value={`${ownerLoad.Mike || 0} / ${ownerLoad.Adam || 0}`} sub="Mike / Adam active load" />
+              <StatCard label="Date clashes" value={clashDates.size} sub={clashDates.size ? "Needs checking" : "None right now"} />
+            </div>
+
+            <Section title="Today's actions">
+              <div className="flex flex-col gap-2">
+                {actionItems.length === 0 && <Card><span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs">All caught up.</span></Card>}
+                {actionItems.map((item) =>
+                  item.kind === "call" ? (
+                    <Card key={"c" + item.id}>
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                          <Pill bg={C.blue} text={C.blueText}>Call</Pill>
+                          <span style={{ fontWeight: 700, color: C.ink }} className="ml-2">{item.c.client} — {item.c.when}</span>
+                          <span style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs ml-2">{item.c.venue}</span>
+                          {item.c.notes && <div style={{ color: "#4A4738" }} className="text-sm mt-1">{item.c.notes}</div>}
+                        </div>
+                        <BtnGhost onClick={() => removeCall(item.c.id)}><ICheck size={12} /> Done / remove</BtnGhost>
+                      </div>
+                    </Card>
+                  ) : (
+                    <Card key={"e" + item.id}>
+                      <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+                        <div>
+                          <span style={{ fontWeight: 700, color: C.ink }}>{item.e.client}</span>
+                          <span style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs ml-2">{item.e.venue} · Wedding {fmtDate(item.e.date)}</span>
+                          {item.e.email && <div style={{ color: "#8A8367", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] mt-0.5 flex items-center gap-1"><IMail size={11} />{item.e.email}{item.e.phone ? ` · ${item.e.phone}` : ""}</div>}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <OwnerTag owner={item.e.owner} />
+                          {item.e.followUpDate ? <UrgencyPill days={daysUntil(item.e.followUpDate)} /> : <UrgencyPill days={daysUntil(item.e.date)} />}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap pt-2" style={{ borderTop: "1px dashed #C9C2AC" }}>
+                        <select value={item.e.status} onChange={(ev) => setEnqStatus(item.e.id, ev.target.value)} style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="px-2 py-1 rounded-sm uppercase">
+                          {ENQUIRY_STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                        </select>
+                        <div className="flex items-center gap-1.5">
+                          <span style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] uppercase">Follow up:</span>
+                          <input type="date" value={item.e.followUpDate || ""} onChange={(ev) => patchEnquiry(item.e.id, { followUpDate: ev.target.value || null }, `Set follow-up — ${item.e.client}`)} style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="px-2 py-1 rounded-sm" />
+                        </div>
+                        {item.e.status !== "converted" && item.e.status !== "lost" && (
+                          <BtnGhost onClick={() => convertEnquiry(item.e)}><ICheck size={12} /> Convert to booking</BtnGhost>
+                        )}
+                      </div>
+                    </Card>
+                  )
+                )}
+              </div>
+            </Section>
+          </>
+        )}
+
+        {tab === "enquiries" && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <span style={{ fontFamily: "'Anton', sans-serif", color: C.paper }} className="text-xl uppercase">Enquiries</span>
+              <button onClick={() => setShowEnqForm((s) => !s)} style={{ background: C.acid, color: C.acidText, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="px-3 py-1.5 rounded-sm uppercase tracking-wide flex items-center gap-1.5"><IPlus size={13} /> New enquiry</button>
+            </div>
+
+            {showEnqForm && (
+              <Card style={{ marginBottom: 16 }}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                  <Field placeholder="Client name(s)" value={enqForm.client} onChange={(e) => setEnqForm({ ...enqForm, client: e.target.value })} />
+                  <Field placeholder="Email" value={enqForm.email} onChange={(e) => setEnqForm({ ...enqForm, email: e.target.value })} />
+                  <Field placeholder="Phone" value={enqForm.phone} onChange={(e) => setEnqForm({ ...enqForm, phone: e.target.value })} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                  <Field placeholder="Venue" value={enqForm.venue} onChange={(e) => setEnqForm({ ...enqForm, venue: e.target.value })} />
+                  <Field type="date" value={enqForm.date} onChange={(e) => setEnqForm({ ...enqForm, date: e.target.value })} />
+                  <select value={enqForm.quotedPackageId} onChange={(e) => setEnqForm({ ...enqForm, quotedPackageId: e.target.value })} style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }} className="px-2 py-1.5 rounded-sm">
+                    <option value="">No package quoted</option>
+                    {packages.map((p) => <option key={p.id} value={p.id}>{p.name} — £{p.price}</option>)}
+                  </select>
+                  <Field placeholder="Est. value £ (or pick package)" value={enqForm.value} onChange={(e) => setEnqForm({ ...enqForm, value: e.target.value })} />
+                </div>
+                <div style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] mt-2">Will auto-assign to {nextOwner} to keep the split fair.</div>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={addEnquiry} style={{ background: C.ink, color: C.paper }} className="px-3 py-1.5 rounded-sm text-xs uppercase">Save</button>
+                  <button onClick={() => setShowEnqForm(false)} style={{ color: C.ink }} className="px-3 py-1.5 rounded-sm text-xs uppercase">Cancel</button>
+                </div>
+              </Card>
+            )}
+
+            <div className="flex flex-col gap-2">
+              {enquiries.map((e) => {
+                const pkg = packages.find((p) => p.id === e.quotedPackageId);
+                const clashed = clashDates.has(e.date);
+                return (
+                  <Card key={e.id}>
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <span style={{ fontWeight: 700, color: C.ink }}>{e.client}</span>
+                        <span style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs ml-2">{e.venue} · {fmtDate(e.date)}{e.value ? ` · £${e.value.toLocaleString()}` : ""}</span>
+                        <div style={{ color: "#8A8367", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] mt-0.5 flex items-center gap-1 flex-wrap">
+                          {e.email && <span className="flex items-center gap-1"><IMail size={11} />{e.email}</span>}
+                          {e.phone && <span>{e.phone}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {clashed && <Pill bg={C.hot} text="#fff">Date clash</Pill>}
+                        <OwnerTag owner={e.owner} />
+                        <UrgencyPill days={daysUntil(e.date)} />
+                        <select value={e.status} onChange={(ev) => setEnqStatus(e.id, ev.target.value)} style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="px-2 py-1 rounded-sm uppercase">
+                          {ENQUIRY_STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                        </select>
+                        {e.status !== "converted" && e.status !== "lost" && <BtnGhost onClick={() => convertEnquiry(e)}><ICheck size={12} /> Convert to booking</BtnGhost>}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-wrap mt-3 pt-3" style={{ borderTop: "1px dashed #C9C2AC" }}>
+                      <div className="flex items-center gap-1.5">
+                        <span style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] uppercase">Quoted:</span>
+                        <select value={e.quotedPackageId || ""} onChange={(ev) => setEnqPackage(e.id, ev.target.value)} style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="px-2 py-1 rounded-sm">
+                          <option value="">No package</option>
+                          {packages.map((p) => <option key={p.id} value={p.id}>{p.name} — £{p.price}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] uppercase">Follow up by:</span>
+                        <input type="date" value={e.followUpDate || ""} onChange={(ev) => patchEnquiry(e.id, { followUpDate: ev.target.value || null }, `Set follow-up — ${e.client}`)} style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="px-2 py-1 rounded-sm" />
+                      </div>
+                      {e.status === "lost" && (
+                        <div className="flex items-center gap-1.5">
+                          <span style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] uppercase">Lost reason:</span>
+                          <select value={e.lostReason || ""} onChange={(ev) => patchEnquiry(e.id, { lostReason: ev.target.value }, `Lost reason — ${e.client}`)} style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="px-2 py-1 rounded-sm">
+                            <option value="">Select reason</option>
+                            {LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {tab === "pipeline" && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <span style={{ fontFamily: "'Anton', sans-serif", color: C.paper }} className="text-xl uppercase">Pipeline</span>
+              <button onClick={() => setShowBkForm((s) => !s)} style={{ background: C.acid, color: C.acidText, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="px-3 py-1.5 rounded-sm uppercase tracking-wide flex items-center gap-1.5"><IPlus size={13} /> New booking</button>
+            </div>
+
+            {showBkForm && (
+              <Card style={{ marginBottom: 16 }}>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                  <Field placeholder="Client name(s)" value={bkForm.client} onChange={(e) => setBkForm({ ...bkForm, client: e.target.value })} className="md:col-span-2" />
+                  <Field type="date" value={bkForm.date} onChange={(e) => setBkForm({ ...bkForm, date: e.target.value })} />
+                  <Field placeholder="Venue" value={bkForm.venue} onChange={(e) => setBkForm({ ...bkForm, venue: e.target.value })} />
+                </div>
+                <div style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] mt-2">Will auto-assign to {nextOwner}.</div>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={addBooking} style={{ background: C.ink, color: C.paper }} className="px-3 py-1.5 rounded-sm text-xs uppercase">Save</button>
+                  <button onClick={() => setShowBkForm(false)} style={{ color: C.ink }} className="px-3 py-1.5 rounded-sm text-xs uppercase">Cancel</button>
+                </div>
+              </Card>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {STAGES.map((stage) => {
+                const items = bookings.filter((b) => !b.archived && b.stage === stage.key);
+                return (
+                  <div key={stage.key}>
+                    <div style={{ borderBottom: `1px dashed ${C.line}`, color: C.paper }} className="flex items-baseline justify-between pb-2 mb-3">
+                      <span style={{ fontFamily: "'Anton', sans-serif" }} className="text-sm tracking-wide uppercase">{stage.label}</span>
+                      <span style={{ color: C.mute, fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs">{items.length}</span>
+                    </div>
+                    {items.length === 0 && <div style={{ color: C.mute, fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs italic pb-4">Nothing here.</div>}
+                    {items.map((b) => {
+                      const clashed = clashDates.has(b.date);
+                      return (
+                        <Card key={b.id} style={{ marginBottom: 12 }}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span style={{ fontWeight: 700, color: C.ink }} className="text-base">{b.client}</span>
+                            <OwnerTag owner={b.owner} />
+                          </div>
+                          <div style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs mb-1">{fmtDate(b.date)} · {b.venue}</div>
+                          {(b.email || b.phone) && (
+                            <div style={{ color: "#8A8367", fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] mb-2 flex items-center gap-1 flex-wrap">
+                              {b.email && <span className="flex items-center gap-1"><IMail size={11} />{b.email}</span>}
+                              {b.phone && <span>{b.phone}</span>}
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            {clashed && <Pill bg={C.hot} text="#fff">Date clash</Pill>}
+                            <UrgencyPill days={daysUntil(b.date)} />
+                            {b.contractReceived && <Pill bg={C.ok} text={C.okText}>Contract in · {b.contractReceivedDate}</Pill>}
+                            {b.stage !== "contract" && b.deposit === "received" && <Pill bg={C.ok} text={C.okText}>Deposit received</Pill>}
+                            {b.deposit === "not_required" && <Pill bg="#D8D2BE" text="#3A3626">No deposit required</Pill>}
+                            {b.stage === "live" && <Pill bg={C.hot} text="#fff">Live</Pill>}
+                            {b.paidInFull && <Pill bg={C.acid} text={C.acidText}>Paid in full</Pill>}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {stage.key === "contract" && (
+                              <BtnGhost onClick={() => updateBooking(b.id, { contractReceived: true, contractReceivedDate: fmtDate(todayISO()), stage: "deposit" }, `Contract received — ${b.client}`)}>
+                                <ICheck size={12} /> Contract received
+                              </BtnGhost>
+                            )}
+                            {stage.key === "deposit" && (
+                              <>
+                                <BtnGhost onClick={() => updateBooking(b.id, { deposit: "received", stage: "live" }, `Deposit received — ${b.client}`)}><ICheck size={12} /> Deposit received</BtnGhost>
+                                <BtnGhost onClick={() => updateBooking(b.id, { deposit: "not_required", stage: "live" }, `No deposit required — ${b.client}`)}>No deposit</BtnGhost>
+                                <BtnGhost onClick={() => updateBooking(b.id, { contractReceived: false, contractReceivedDate: null, stage: "contract" }, `Undo contract — ${b.client}`)} style={{ opacity: 0.6 }}><IArrowLeft size={12} /> Back to contract</BtnGhost>
+                              </>
+                            )}
+                            {stage.key === "live" && (
+                              <>
+                                {!b.paidInFull && <BtnGhost onClick={() => updateBooking(b.id, { paidInFull: true }, `Marked paid in full — ${b.client}`)}><ICheck size={12} /> Mark paid in full</BtnGhost>}
+                                {b.paidInFull && <BtnGhost onClick={() => updateBooking(b.id, { paidInFull: false }, `Undo paid in full — ${b.client}`)} style={{ opacity: 0.6 }}>Undo paid</BtnGhost>}
+                                <BtnGhost onClick={() => updateBooking(b.id, { deposit: "awaiting", stage: "deposit" }, `Reopened deposit — ${b.client}`)} style={{ opacity: 0.6 }}><IArrowLeft size={12} /> Reopen deposit</BtnGhost>
+                                <BtnGhost onClick={() => updateBooking(b.id, { archived: true }, `Archived — ${b.client}`)}><IArchive size={12} /> Archive</BtnGhost>
+                              </>
+                            )}
+                            <BtnGhost onClick={() => setDetailBookingId(b.id)} style={{ opacity: 0.75 }}>Full details</BtnGhost>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {tab === "calls" && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <span style={{ fontFamily: "'Anton', sans-serif", color: C.paper }} className="text-xl uppercase">Calls</span>
+              <button onClick={() => setShowCallForm((s) => !s)} style={{ background: C.acid, color: C.acidText, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="px-3 py-1.5 rounded-sm uppercase tracking-wide flex items-center gap-1.5"><IPlus size={13} /> Book call</button>
+            </div>
+            {showCallForm && (
+              <Card style={{ marginBottom: 16 }}>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                  <Field placeholder="Client" value={callForm.client} onChange={(e) => setCallForm({ ...callForm, client: e.target.value })} />
+                  <Field placeholder="When, e.g. Tue · 18:30" value={callForm.when} onChange={(e) => setCallForm({ ...callForm, when: e.target.value })} />
+                  <Field placeholder="Venue" value={callForm.venue} onChange={(e) => setCallForm({ ...callForm, venue: e.target.value })} />
+                  <Field placeholder="Notes" value={callForm.notes} onChange={(e) => setCallForm({ ...callForm, notes: e.target.value })} />
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={addCall} style={{ background: C.ink, color: C.paper }} className="px-3 py-1.5 rounded-sm text-xs uppercase">Save</button>
+                  <button onClick={() => setShowCallForm(false)} style={{ color: C.ink }} className="px-3 py-1.5 rounded-sm text-xs uppercase">Cancel</button>
+                </div>
+              </Card>
+            )}
+            <div className="flex flex-col gap-2">
+              {calls.length === 0 && <Card><span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs">No calls booked.</span></Card>}
+              {calls.map((c) => (
+                <Card key={c.id}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <span style={{ fontWeight: 700, color: C.ink }}>{c.client}</span>
+                      <span style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs ml-2">{c.when} · {c.venue}</span>
+                      {c.notes && <div style={{ color: "#4A4738" }} className="text-sm mt-1">{c.notes}</div>}
+                    </div>
+                    <BtnGhost onClick={() => removeCall(c.id)}><IX size={12} /> Done / remove</BtnGhost>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </>
+        )}
+
+        {tab === "venues" && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <span style={{ fontFamily: "'Anton', sans-serif", color: C.paper }} className="text-xl uppercase">Venues</span>
+              <button onClick={() => setShowVenueForm((s) => !s)} style={{ background: C.acid, color: C.acidText, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="px-3 py-1.5 rounded-sm uppercase tracking-wide flex items-center gap-1.5"><IPlus size={13} /> Add venue</button>
+            </div>
+            {showVenueForm && (
+              <Card style={{ marginBottom: 16 }}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <Field placeholder="Venue name" value={venueForm.name} onChange={(e) => setVenueForm({ ...venueForm, name: e.target.value })} />
+                  <Field placeholder="Location" value={venueForm.location} onChange={(e) => setVenueForm({ ...venueForm, location: e.target.value })} />
+                  <Field placeholder="Notes — curfew, power, access" value={venueForm.notes} onChange={(e) => setVenueForm({ ...venueForm, notes: e.target.value })} />
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={addVenue} style={{ background: C.ink, color: C.paper }} className="px-3 py-1.5 rounded-sm text-xs uppercase">Save</button>
+                  <button onClick={() => setShowVenueForm(false)} style={{ color: C.ink }} className="px-3 py-1.5 rounded-sm text-xs uppercase">Cancel</button>
+                </div>
+              </Card>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {venues.map((v) => (
+                <Card key={v.id}>
+                  <div style={{ fontWeight: 700, color: C.ink }}>{v.name}</div>
+                  <div style={{ color: "#4A4738", fontFamily: "'IBM Plex Mono', monospace" }} className="text-xs mt-0.5">{v.location}</div>
+                  {v.notes && <div style={{ color: "#4A4738" }} className="text-sm mt-2">{v.notes}</div>}
+                </Card>
+              ))}
+            </div>
+          </>
+        )}
+
+        {tab === "packages" && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <span style={{ fontFamily: "'Anton', sans-serif", color: C.paper }} className="text-xl uppercase">Packages</span>
+              <button onClick={() => setShowPkgForm((s) => !s)} style={{ background: C.acid, color: C.acidText, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} className="px-3 py-1.5 rounded-sm uppercase tracking-wide flex items-center gap-1.5"><IPlus size={13} /> Add package</button>
+            </div>
+            {showPkgForm && (
+              <Card style={{ marginBottom: 16 }}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <Field placeholder="Package name" value={pkgForm.name} onChange={(e) => setPkgForm({ ...pkgForm, name: e.target.value })} />
+                  <Field placeholder="Price £" value={pkgForm.price} onChange={(e) => setPkgForm({ ...pkgForm, price: e.target.value })} />
+                  <Field placeholder="What's included" value={pkgForm.description} onChange={(e) => setPkgForm({ ...pkgForm, description: e.target.value })} />
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={addPackage} style={{ background: C.ink, color: C.paper }} className="px-3 py-1.5 rounded-sm text-xs uppercase">Save</button>
+                  <button onClick={() => setShowPkgForm(false)} style={{ color: C.ink }} className="px-3 py-1.5 rounded-sm text-xs uppercase">Cancel</button>
+                </div>
+              </Card>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {packages.map((p) => (
+                <Card key={p.id}>
+                  <div className="flex items-center justify-between">
+                    <span style={{ fontWeight: 700, color: C.ink }}>{p.name}</span>
+                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: C.ink }} className="text-sm">£{p.price.toLocaleString()}</span>
+                  </div>
+                  {p.description && <div style={{ color: "#4A4738" }} className="text-sm mt-2">{p.description}</div>}
+                </Card>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div style={{ color: C.mute, fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] mt-8 pt-4 md:hidden flex items-center gap-3">
+          <button onClick={exportData} className="flex items-center gap-1 uppercase"><IDownload size={12} /> Export</button>
+          <label className="flex items-center gap-1 uppercase cursor-pointer"><IUpload size={12} /> Import<input type="file" accept="application/json" onChange={importData} className="hidden" /></label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<StyleOS />);
+</script>
+</body>
+</html>
